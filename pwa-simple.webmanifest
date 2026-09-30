@@ -1,0 +1,14 @@
+{
+  "name": "申论练笔 · AI 评判",
+  "short_name": "申论练笔",
+  "description": "近十年国考/天津/吉林申论真题，AI 阅卷打分",
+  "start_url": "simple.html",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#faf7f1",
+  "theme_color": "#b4832a",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

@@ -4,12 +4,33 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>申论练笔 · AI 评判</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23b4832a'/%3E%3Ctext x='32' y='45' font-size='34' text-anchor='middle' fill='white' font-family='serif'%3E%E9%98%85%3C/text%3E%3C/svg%3E">
+<link rel="manifest" href="pwa-simple.webmanifest">
 <style>
+  /* 全部颜色收进变量（深色模式只覆盖变量，避免硬编码色值漏网） */
   :root{
     --ink:#2b2620; --sub:#8a8175; --paper:#faf7f1; --card:#fff; --line:#e8e1d5;
     --amber:#b4832a; --amber-soft:#f5ecd9; --good:#2e7d4f; --bad:#b03a2e;
+    --body2:#4a443c; --mat-bg:#fbf9f4; --mat-line:#f0e9dc; --ta-bg:#fffdf8;
+    --track:#f0e9dc; --good-soft:#e6f2ea; --draft-soft:#efece6; --bad-soft:#f7e8e6;
+    --rem-bg:#fdf3dd; --rem-bd:#f0dcae; --rem-tx:#8a5b13;
+    --mask:rgba(30,25,18,.45); --toast-bg:#2b2620; --toast-tx:#fff;
+    --paper-rgb:250,247,241; --shadow:rgba(43,38,32,.07);
+    --fs-mat:14px; --fs-q:15px; --fs-ta:15px;
     --radius:14px;
   }
+  html.dark{
+    --ink:#e6e1d6; --sub:#9a917d; --paper:#15130f; --card:#1e1b16; --line:#332e25;
+    --amber:#d4a752; --amber-soft:rgba(212,167,82,.16); --good:#6fbf8f; --bad:#e08575;
+    --body2:#c9c2b4; --mat-bg:#211e18; --mat-line:#332e25; --ta-bg:#1b1813;
+    --track:#332e25; --good-soft:rgba(111,191,143,.15); --draft-soft:rgba(255,255,255,.09); --bad-soft:rgba(224,133,117,.16);
+    --rem-bg:rgba(212,167,82,.12); --rem-bd:rgba(212,167,82,.3); --rem-tx:#d8b97a;
+    --mask:rgba(0,0,0,.6); --toast-bg:#efe9dd; --toast-tx:#2b2620;
+    --paper-rgb:21,19,15; --shadow:rgba(0,0,0,.35);
+  }
+  html.fs-lg{ --fs-mat:16px; --fs-q:17px; --fs-ta:17px; }
+  html.fs-xl{ --fs-mat:18px; --fs-q:19px; --fs-ta:19px; }
+
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   body{
     font-family:-apple-system,"PingFang SC","Helvetica Neue",sans-serif;
@@ -20,10 +41,10 @@
 
   /* ---------- 顶栏 ---------- */
   header{
-    position:sticky;top:0;z-index:20;background:rgba(250,247,241,.92);
+    position:sticky;top:0;z-index:20;background:rgba(var(--paper-rgb),.92);
     backdrop-filter:blur(8px);border-bottom:1px solid var(--line);
   }
-  .topbar{display:flex;align-items:center;gap:10px;padding:12px 0}
+  .topbar{display:flex;align-items:center;gap:8px;padding:12px 0}
   .topbar h1{font-size:18px;font-weight:700;letter-spacing:1px;flex:1}
   .topbar h1 .zhang{
     display:inline-flex;align-items:center;justify-content:center;
@@ -33,8 +54,21 @@
   .btn-mini{
     border:1px solid var(--line);background:var(--card);color:var(--sub);
     border-radius:8px;padding:5px 12px;font-size:13px;cursor:pointer;
+    transition:color .15s,border-color .15s;
   }
+  .btn-mini:hover{border-color:var(--amber);color:var(--ink)}
   .btn-mini:active{background:var(--amber-soft)}
+  #btn-fs,#btn-theme{min-width:36px}
+
+  /* ---------- 搜索 ---------- */
+  .search-row{padding:12px 0 0}
+  .search-row input{
+    width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 12px;
+    font-size:14px;background:var(--card);color:var(--ink);outline:none;
+    transition:border-color .15s;
+  }
+  .search-row input:focus{border-color:var(--amber)}
+  .search-row input::placeholder{color:var(--sub)}
 
   /* ---------- 卷别筛选 ---------- */
   .tabs{display:flex;gap:8px;padding:10px 0 4px;overflow-x:auto;scrollbar-width:none}
@@ -42,16 +76,20 @@
   .tab{
     flex-shrink:0;border:1px solid var(--line);background:var(--card);
     border-radius:999px;padding:5px 14px;font-size:13px;color:var(--sub);cursor:pointer;
+    transition:color .15s,border-color .15s;
   }
-  .tab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .tab:hover{border-color:var(--amber);color:var(--ink)}
+  .tab.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 
   /* ---------- 题目列表 ---------- */
   .qlist{padding:12px 0}
   .qcard{
     background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
     padding:14px 16px;margin-bottom:10px;cursor:pointer;
+    transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease;
   }
-  .qcard:active{border-color:var(--amber)}
+  .qcard:hover{border-color:var(--amber);box-shadow:0 6px 18px var(--shadow);transform:translateY(-1px)}
+  .qcard:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
   .qcard .src{font-size:12px;color:var(--amber);margin-bottom:4px}
   .qcard .qt{font-size:15px;font-weight:600;
     display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -60,13 +98,21 @@
     font-size:11px;padding:1px 8px;border-radius:999px;
     background:var(--amber-soft);color:var(--amber);
   }
-  .badge.done{background:#e6f2ea;color:var(--good)}
-  .badge.draft{background:#efece6;color:var(--sub)}
+  .badge.done{background:var(--good-soft);color:var(--good)}
+  .badge.draft{background:var(--draft-soft);color:var(--sub)}
+
+  /* ---------- 视图切换 ---------- */
+  .view{display:none}
+  .view.show{display:block;animation:fadeIn .22s ease}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @media(prefers-reduced-motion:reduce){
+    .view.show{animation:none}
+    *{transition:none !important}
+  }
+  .crumb{font-size:12px;color:var(--sub);padding:12px 0 4px;cursor:pointer}
+  .crumb:hover{color:var(--amber)}
 
   /* ---------- 详情页 ---------- */
-  .view{display:none}
-  .view.show{display:block}
-  .crumb{font-size:12px;color:var(--sub);padding:12px 0 4px;cursor:pointer}
   .panel{
     background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
     padding:14px 16px;margin-bottom:12px;
@@ -77,33 +123,65 @@
   }
   .fold-toggle{cursor:pointer;color:var(--sub);font-size:12px;user-select:none}
   .material{
-    font-size:14px;color:#4a443c;white-space:pre-wrap;
+    font-size:var(--fs-mat);color:var(--body2);white-space:pre-wrap;
     max-height:260px;overflow-y:auto;padding:10px 12px;
-    background:#fbf9f4;border-radius:10px;border:1px solid #f0e9dc;
+    background:var(--mat-bg);border-radius:10px;border:1px solid var(--mat-line);
+    font-family:"STFangsong","FangSong","Songti SC","STSong",serif;
   }
+  .material::-webkit-scrollbar{width:6px}
+  .material::-webkit-scrollbar-thumb{background:var(--mat-line);border-radius:3px}
   .folded .material{display:none}
-  .question-text{font-size:15px;font-weight:600;white-space:pre-wrap}
-  .timer-row{display:flex;align-items:center;gap:10px;margin:12px 0 8px}
+  .question-text{font-size:var(--fs-q);font-weight:600;white-space:pre-wrap}
+  .timer-row{display:flex;align-items:center;gap:10px;margin:0 0 8px}
   .timer{font-variant-numeric:tabular-nums;font-size:15px;color:var(--sub)}
   .timer.run{color:var(--amber)}
+  #save-flag{font-size:12px;color:var(--good);opacity:0;transition:opacity .3s}
+  #save-flag.show{opacity:1}
   .word-count{margin-left:auto;font-size:13px;color:var(--sub)}
   .word-count.over{color:var(--bad)}
   textarea{
     width:100%;min-height:220px;resize:vertical;
-    font-size:15px;font-family:inherit;line-height:1.8;
+    font-size:var(--fs-ta);font-family:"STFangsong","FangSong","Songti SC","STSong",serif;line-height:2;
     border:1px solid var(--line);border-radius:10px;padding:12px;
-    background:#fffdf8;color:var(--ink);outline:none;
+    background:var(--ta-bg);color:var(--ink);outline:none;
+    transition:border-color .15s;
   }
   textarea:focus{border-color:var(--amber)}
+  .photo-row{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+  .photo-hint{font-size:12px;color:var(--sub)}
   .actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
   .btn{
     border:none;border-radius:10px;padding:11px 20px;font-size:15px;
     cursor:pointer;font-weight:600;
+    transition:filter .15s,border-color .15s,color .15s;
   }
   .btn-primary{background:var(--amber);color:#fff;flex:1;min-width:150px}
-  .btn-primary:disabled{opacity:.5;cursor:default}
+  .btn-primary:hover{filter:brightness(1.07)}
+  .btn-primary:disabled{opacity:.5;cursor:default;filter:none}
   .btn-ghost{background:var(--card);border:1px solid var(--line);color:var(--sub)}
+  .btn-ghost:hover{border-color:var(--amber);color:var(--ink)}
+  .btn-ghost:disabled{opacity:.5;cursor:default}
   .btn-ghost:active{background:var(--amber-soft)}
+  .kbd-tip{font-size:12px;color:var(--sub);margin-top:10px}
+  .answer-panel.dragging{border-color:var(--amber);box-shadow:0 0 0 3px var(--amber-soft)}
+
+  /* ---------- 桌面双栏写作模式 ---------- */
+  .quiz-grid{display:block}
+  #grade-area:empty{display:none}
+  #grade-area{scroll-margin-top:70px}
+  @media(min-width:1100px){
+    #view-quiz{max-width:1180px}
+    .quiz-grid{
+      display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);
+      gap:0 18px;align-items:start;
+    }
+    .qcol-right{position:sticky;top:64px}
+    #grade-area,#ref-panel{grid-column:1 / -1}
+    .material{max-height:max(240px,calc(100vh - 360px))}
+    textarea{min-height:max(340px,calc(100vh - 430px))}
+    .kbd-tip{display:block}
+  }
+  @media(max-width:760px){ .kbd-tip{display:none} }
 
   /* ---------- 评判结果 ---------- */
   .score-card{
@@ -121,18 +199,18 @@
   .dim-row{display:flex;align-items:baseline;gap:8px;font-size:14px}
   .dim-name{font-weight:600}
   .dim-score{color:var(--amber);font-variant-numeric:tabular-nums}
-  .dim-bar{height:5px;background:#f0e9dc;border-radius:99px;margin:4px 0;overflow:hidden}
+  .dim-bar{height:5px;background:var(--track);border-radius:99px;margin:4px 0;overflow:hidden}
   .dim-bar i{display:block;height:100%;background:var(--amber);border-radius:99px}
   .dim-comment{font-size:13px;color:var(--sub)}
   .sec-title{font-size:13px;font-weight:700;margin:14px 0 6px;letter-spacing:1px}
   .sec-title.good{color:var(--good)} .sec-title.bad{color:var(--bad)}
-  .li{font-size:14px;padding-left:1.1em;position:relative;margin:4px 0;color:#4a443c}
+  .li{font-size:14px;padding-left:1.1em;position:relative;margin:4px 0;color:var(--body2)}
   .li::before{content:"·";position:absolute;left:0;font-weight:700}
-  .summary{font-size:14px;color:#4a443c;white-space:pre-wrap}
+  .summary{font-size:14px;color:var(--body2);white-space:pre-wrap}
   .err{color:var(--bad);font-size:14px;white-space:pre-wrap}
 
-  .code-tag{display:inline-block;font-size:11px;background:#f7e8e6;color:var(--bad);border-radius:6px;padding:0 6px;margin-right:6px;vertical-align:1px;white-space:nowrap}
-  .remind-box{margin-top:12px;font-size:13px;color:#8a5b13;background:#fdf3dd;border:1px solid #f0dcae;border-radius:10px;padding:10px 12px}
+  .code-tag{display:inline-block;font-size:11px;background:var(--bad-soft);color:var(--bad);border-radius:6px;padding:0 6px;margin-right:6px;vertical-align:1px;white-space:nowrap}
+  .remind-box{margin-top:12px;font-size:13px;color:var(--rem-tx);background:var(--rem-bg);border:1px solid var(--rem-bd);border-radius:10px;padding:10px 12px}
   .weak-item{display:flex;align-items:baseline;gap:8px;font-size:14px;margin:8px 0}
   .weak-cnt{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--sub);font-size:13px;white-space:nowrap}
   .weak-src{font-size:12px;color:var(--sub)}
@@ -141,15 +219,14 @@
     padding:16px 2px 8px;display:flex;align-items:baseline;gap:8px;
   }
   .paper-head small{font-size:12px;color:var(--sub);font-weight:400}
-  .photo-row{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
-  .photo-hint{font-size:12px;color:var(--sub)}
 
   /* ---------- 参考答案 ---------- */
-  .ref-body{font-size:14px;white-space:pre-wrap;color:#4a443c}
+  .ref-body{font-size:var(--fs-mat);white-space:pre-wrap;color:var(--body2);
+    font-family:"STFangsong","FangSong","Songti SC","STSong",serif}
 
   /* ---------- 设置弹层 ---------- */
   .mask{
-    position:fixed;inset:0;background:rgba(30,25,18,.45);z-index:50;
+    position:fixed;inset:0;background:var(--mask);z-index:50;
     display:none;align-items:flex-end;justify-content:center;
   }
   .mask.show{display:flex}
@@ -163,13 +240,14 @@
   .field label{display:block;font-size:13px;color:var(--sub);margin-bottom:4px}
   .field input{
     width:100%;border:1px solid var(--line);border-radius:10px;
-    padding:10px 12px;font-size:14px;background:#fff;outline:none;color:var(--ink);
+    padding:10px 12px;font-size:14px;background:var(--card);color:var(--ink);outline:none;
+    transition:border-color .15s;
   }
   .field input:focus{border-color:var(--amber)}
   .sheet .actions{margin-top:6px}
   .toast{
     position:fixed;left:50%;bottom:80px;transform:translateX(-50%);
-    background:rgba(43,38,32,.92);color:#fff;font-size:13px;
+    background:var(--toast-bg);color:var(--toast-tx);font-size:13px;
     padding:9px 18px;border-radius:99px;z-index:99;
     opacity:0;transition:opacity .25s;pointer-events:none;max-width:80vw;
   }
@@ -185,12 +263,15 @@
 <header>
   <div class="wrap topbar">
     <h1><span class="zhang">阅</span>申论练笔 · AI 评判</h1>
+    <button class="btn-mini" id="btn-fs" title="字号：标准 / 大 / 特大">Aa</button>
+    <button class="btn-mini" id="btn-theme" title="主题：跟随系统 / 浅色 / 深色">🌓</button>
     <button class="btn-mini" id="btn-settings">AI 设置</button>
   </div>
 </header>
 
 <!-- ============ 题目列表 ============ -->
 <div class="wrap view show" id="view-list">
+  <div class="search-row"><input id="search-box" placeholder="搜索题目关键词 / 年份…（按 / 聚焦，Esc 清空）"></div>
   <div class="tabs" id="tabs"></div>
   <div class="panel" id="weak-panel" style="display:none">
     <h3><span>我的失分点 · 跨题统计</span></h3>
@@ -202,43 +283,54 @@
 <!-- ============ 练题详情 ============ -->
 <div class="wrap view" id="view-quiz">
   <div class="crumb" id="crumb">← 返回题目列表</div>
+  <div class="quiz-grid" id="quiz-grid">
 
-  <div class="panel" id="material-panel">
-    <h3><span>给定资料</span><span class="fold-toggle" id="fold-toggle">收起</span></h3>
-    <div class="material" id="material-body"></div>
-  </div>
-
-  <div class="panel">
-    <h3><span>题目</span><span id="q-full"></span></h3>
-    <div class="question-text" id="question-text"></div>
-    <div class="timer-row">
-      <span class="timer" id="timer">00:00</span>
-      <span class="word-count" id="word-count">0 字</span>
+    <div class="qcol qcol-left">
+      <div class="panel" id="material-panel">
+        <h3><span>给定资料</span><span class="fold-toggle" id="fold-toggle">收起</span></h3>
+        <div class="material" id="material-body"></div>
+      </div>
+      <div class="panel" id="question-panel">
+        <h3><span>题目</span><span id="q-full"></span></h3>
+        <div class="question-text" id="question-text"></div>
+      </div>
     </div>
-    <textarea id="answer-input" placeholder="在这里写下你的答案…（自动保存草稿，动笔自动计时；也可以在纸上写完点下方拍照识别）"></textarea>
-    <div class="photo-row">
-      <button class="btn btn-ghost" id="btn-photo">📷 拍照识别手写</button>
-      <span class="photo-hint">纸上写完拍照，AI 转写进作答框（需视觉模型，如 glm-4v / gpt-4o）</span>
-      <input type="file" id="photo-file" accept="image/*" style="display:none">
-    </div>
-    <div class="actions">
-      <button class="btn btn-primary" id="btn-grade">AI 评判打分</button>
-      <button class="btn btn-ghost" id="btn-copy-prompt">复制提示词</button>
-      <button class="btn btn-ghost" id="btn-ref">看参考答案</button>
-    </div>
-  </div>
 
-  <div id="grade-area"></div>
+    <div class="qcol qcol-right">
+      <div class="panel answer-panel" id="answer-panel">
+        <div class="timer-row">
+          <span class="timer" id="timer">00:00</span>
+          <span id="save-flag">✓ 已保存</span>
+          <span class="word-count" id="word-count">0 字</span>
+        </div>
+        <textarea id="answer-input" spellcheck="false" placeholder="在这里写下你的答案…（自动保存草稿，动笔自动计时；也可以在纸上写完拍照识别，或直接粘贴/拖入照片）"></textarea>
+        <div class="photo-row">
+          <button class="btn btn-ghost" id="btn-photo">📷 拍照识别手写</button>
+          <span class="photo-hint">拍照、截图粘贴、拖到此处均可（需视觉模型，如 glm-4v / gpt-4o）</span>
+          <input type="file" id="photo-file" accept="image/*" style="display:none">
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" id="btn-grade">AI 评判打分</button>
+          <button class="btn btn-ghost" id="btn-copy-prompt">复制提示词</button>
+          <button class="btn btn-ghost" id="btn-ref">看参考答案</button>
+        </div>
+        <div class="kbd-tip">Ctrl / ⌘ + Enter 评判 · Esc 返回列表 · 作答框内 Tab 缩进 · 题卡可 Tab 聚焦后回车打开</div>
+      </div>
+    </div>
 
-  <div class="panel" id="ref-panel" style="display:none">
-    <h3><span>参考答案与解析</span></h3>
-    <div class="ref-body" id="ref-body"></div>
+    <div id="grade-area"></div>
+
+    <div class="panel" id="ref-panel" style="display:none">
+      <h3><span>参考答案与解析</span></h3>
+      <div class="ref-body" id="ref-body"></div>
+    </div>
+
   </div>
 </div>
 
 <!-- ============ AI 设置 ============ -->
 <div class="mask" id="mask">
-  <div class="sheet">
+  <div class="sheet" id="sheet">
     <h2>AI 设置</h2>
     <p class="hint">填写任意「OpenAI 兼容」接口即可（DeepSeek / Kimi / GLM / OpenAI 等）。API Key 只保存在你本机浏览器，不会上传到任何服务器。拍照识别手写需所用模型支持图片输入（视觉模型，如 glm-4v / gpt-4o / qwen-vl）。若接口不支持浏览器直连（CORS），可用「复制提示词」按钮把题目+你的答案粘给任意 AI 应用。</p>
     <div class="field">
@@ -274,6 +366,9 @@
 <script>
 (function () {
   "use strict";
+
+  var ANIM = true;
+  try { ANIM = !window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
 
   // ================= 数据 =================
   var VOLUMES = [
@@ -315,13 +410,17 @@
   function loadSettings() {
     try { return JSON.parse(localStorage.getItem(SET_KEY) || "{}"); } catch (e) { return {}; }
   }
-  function saveSettings(s) { localStorage.setItem(SET_KEY, JSON.stringify(s)); }
+  function saveSettings(patch) {
+    localStorage.setItem(SET_KEY, JSON.stringify(Object.assign(loadSettings(), patch)));
+  }
 
   // ================= 工具 =================
   var $ = function (id) { return document.getElementById(id); };
   var cur = null;          // 当前题目包装对象
   var timerInt = null, elapsed = 0, typing = false;
   var curTab = "all";
+  var curSearch = "";
+  var scrollMemo = 0;      // 列表滚动位置记忆：进题前存，返回时恢复
 
   var toastInt = null;
   function toast(msg) {
@@ -351,6 +450,47 @@
     return m ? m[1].trim() : analysis;
   }
 
+  function viewIsQuiz() { return $("view-quiz").classList.contains("show"); }
+
+  // ================= 主题 / 字号 =================
+  var mqDark = null, mqWide = null;
+  try {
+    mqDark = window.matchMedia("(prefers-color-scheme: dark)");
+    mqWide = window.matchMedia("(min-width:1100px)");
+  } catch (e) {}
+  function applyPrefs() {
+    var s = loadSettings();
+    var theme = s.theme || "auto";
+    var dark = theme === "dark" || (theme === "auto" && mqDark && mqDark.matches);
+    document.documentElement.classList.toggle("dark", dark);
+    $("btn-theme").textContent = theme === "dark" ? "🌙" : theme === "light" ? "☀️" : "🌓";
+    $("btn-theme").title = "主题：" + (theme === "dark" ? "深色" : theme === "light" ? "浅色" : "跟随系统") + "（点击切换）";
+    var fs = s.fs || "";
+    document.documentElement.classList.toggle("fs-lg", fs === "lg");
+    document.documentElement.classList.toggle("fs-xl", fs === "xl");
+  }
+  $("btn-theme").addEventListener("click", function () {
+    var order = ["auto", "light", "dark"];
+    var cur2 = loadSettings().theme || "auto";
+    var next = order[(order.indexOf(cur2) + 1) % order.length];
+    saveSettings({ theme: next });
+    applyPrefs();
+    toast("主题：" + (next === "auto" ? "跟随系统" : next === "light" ? "浅色" : "深色"));
+  });
+  $("btn-fs").addEventListener("click", function () {
+    var order = ["", "lg", "xl"];
+    var cur2 = loadSettings().fs || "";
+    var next = order[(order.indexOf(cur2) + 1) % order.length];
+    saveSettings({ fs: next });
+    applyPrefs();
+    toast("字号：" + (next === "" ? "标准" : next === "lg" ? "大" : "特大"));
+  });
+  if (mqDark && mqDark.addEventListener) {
+    mqDark.addEventListener("change", function () {
+      if ((loadSettings().theme || "auto") === "auto") applyPrefs();
+    });
+  }
+
   // ================= 列表视图 =================
   function renderTabs() {
     var el = $("tabs");
@@ -359,16 +499,24 @@
       var b = document.createElement("button");
       b.className = "tab" + (curTab === v.key ? " on" : "");
       b.textContent = v.label;
-      b.addEventListener("click", function () { curTab = v.key; renderTabs(); renderList(); });
+      b.addEventListener("click", function () {
+        curTab = v.key; renderTabs(); renderList();
+        window.scrollTo(0, 0);
+      });
       el.appendChild(b);
     });
+  }
+
+  function matchSearch(it) {
+    if (!curSearch) return true;
+    return (it.q.source + "\n" + it.q.question).toLowerCase().indexOf(curSearch) > -1;
   }
 
   function renderList() {
     var el = $("qlist");
     el.innerHTML = "";
     renderWeakPanel();
-    var items = qs.filter(function (it) { return curTab === "all" || it.vol === curTab; });
+    var items = qs.filter(function (it) { return (curTab === "all" || it.vol === curTab) && matchSearch(it); });
     // 按「考试+年份」分卷，像卷子一样陈列；年份倒序，卷内按题号正序
     var groups = {};
     items.forEach(function (it) {
@@ -393,6 +541,8 @@
           var d = store.drafts[it.q.id];
           var card = document.createElement("div");
           card.className = "qcard";
+          card.tabIndex = 0;
+          card.setAttribute("role", "button");
           var scoreTxt = g ? '<span class="badge done">已评分 ' + g.score + "/" + g.total + "</span>" :
                          (d && d.text && d.text.trim() ? '<span class="badge draft">有草稿</span>' : "");
           card.innerHTML =
@@ -401,15 +551,28 @@
             '<div class="meta"><span class="badge">' + parseFullScore(it.q.question) + " 分</span>" +
             (parseLimit(it.q.question) ? "<span>≤" + parseLimit(it.q.question) + "字</span>" : "") +
             scoreTxt + "</div>";
-          card.addEventListener("click", function () { openQuiz(it); });
+          function open() { openQuiz(it); }
+          card.addEventListener("click", open);
+          card.addEventListener("keydown", function (e) {
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+          });
           el.appendChild(card);
         });
       });
-    if (!el.children.length) el.innerHTML = '<p style="color:var(--sub);font-size:14px;padding:20px 0">该卷别暂无题目</p>';
+    if (!el.children.length) {
+      el.innerHTML = '<p style="color:var(--sub);font-size:14px;padding:20px 0">' +
+        (curSearch ? "没有匹配的题目，换个关键词试试（Esc 清空搜索）" : "该卷别暂无题目") + "</p>";
+    }
   }
+
+  $("search-box").addEventListener("input", function () {
+    curSearch = this.value.trim().toLowerCase();
+    renderList();
+  });
 
   // ================= 详情视图 =================
   function openQuiz(it) {
+    scrollMemo = window.scrollY;   // 记住列表位置，返回时恢复
     cur = it;
     showView("quiz");
     $("crumb").textContent = "← 返回题目列表 · " + it.q.source;
@@ -431,11 +594,23 @@
     $("ref-panel").style.display = "none";
     $("btn-ref").textContent = "看参考答案";
     window.scrollTo(0, 0);
+    // 桌面宽屏：作答区就在眼前，直接聚焦，落笔即写
+    if (mqWide && mqWide.matches) setTimeout(function () { $("answer-input").focus(); }, 80);
   }
 
   function showView(name) {
     $("view-list").classList.toggle("show", name === "list");
     $("view-quiz").classList.toggle("show", name === "quiz");
+  }
+
+  function backToList() {
+    stopTimer();
+    showView("list");
+    renderList();
+    // 恢复进入题目前的列表滚动位置（渲染后下一帧再滚，避免布局未就绪）
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { window.scrollTo(0, scrollMemo); });
+    });
   }
 
   function stopTimer() {
@@ -455,6 +630,14 @@
     el.classList.toggle("over", limit > 0 && n > limit);
   }
 
+  var saveFlagInt = null;
+  function flagSaved() {
+    var el = $("save-flag");
+    el.classList.add("show");
+    clearTimeout(saveFlagInt);
+    saveFlagInt = setTimeout(function () { el.classList.remove("show"); }, 1500);
+  }
+
   $("answer-input").addEventListener("input", function () {
     if (!typing) {
       typing = true;
@@ -465,6 +648,17 @@
     if (cur) {
       store.drafts[cur.q.id] = { text: $("answer-input").value, secs: elapsed };
       save();
+      flagSaved();
+    }
+  });
+  // 作答框内 Tab = 两个全角空格缩进（而不是跳出焦点，打断写作心流）
+  $("answer-input").addEventListener("keydown", function (e) {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      var s = this.selectionStart, t = this.selectionEnd;
+      this.value = this.value.slice(0, s) + "\u3000\u3000" + this.value.slice(t);
+      this.selectionStart = this.selectionEnd = s + 2;
+      this.dispatchEvent(new Event("input"));
     }
   });
   $("fold-toggle").addEventListener("click", function () {
@@ -477,19 +671,35 @@
     var show = p.style.display === "none";
     p.style.display = show ? "block" : "none";
     this.textContent = show ? "收起参考答案" : "看参考答案";
+    if (show && ANIM) setTimeout(function () { p.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, 100);
   });
-  $("crumb").addEventListener("click", function () {
-    stopTimer();
-    showView("list");
-    renderList();
+  $("crumb").addEventListener("click", backToList);
+
+  // ================= 全局键盘流 =================
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      if ($("mask").classList.contains("show")) { $("mask").classList.remove("show"); return; }
+      if (viewIsQuiz()) { backToList(); return; }
+      var sb = $("search-box");
+      if (document.activeElement === sb) {
+        sb.value = ""; curSearch = ""; renderList(); sb.blur();
+      }
+      return;
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      if (viewIsQuiz()) { e.preventDefault(); $("btn-grade").click(); }
+      return;
+    }
+    if (e.key === "/" && !viewIsQuiz()) {
+      var tag = (e.target && e.target.tagName) || "";
+      if (tag !== "INPUT" && tag !== "TEXTAREA") { e.preventDefault(); $("search-box").focus(); }
+    }
   });
 
   // ================= 拍照识别手写作答 =================
-  $("btn-photo").addEventListener("click", function () { $("photo-file").click(); });
-  $("photo-file").addEventListener("change", function () {
-    var f = this.files && this.files[0];
-    this.value = "";
+  function handlePhotoFile(f) {
     if (!f) return;
+    if (!cur) return;
     var s = loadSettings();
     if (!s.base || !s.key || !s.model) {
       toast("拍照识别需要先在「AI 设置」配置接口");
@@ -511,7 +721,7 @@
           timerInt = setInterval(function () { elapsed++; renderTimer(); }, 1000);
         }
         renderWordCount();
-        if (cur) { store.drafts[cur.q.id] = { text: ta.value, secs: elapsed }; save(); }
+        if (cur) { store.drafts[cur.q.id] = { text: ta.value, secs: elapsed }; save(); flagSaved(); }
         toast("识别完成，请核对转写内容再评判");
       }, function (err) {
         btn.disabled = false;
@@ -523,7 +733,41 @@
       btn.textContent = "📷 拍照识别手写";
       toast("读取图片失败：" + err);
     });
+  }
+  $("btn-photo").addEventListener("click", function () { $("photo-file").click(); });
+  $("photo-file").addEventListener("change", function () {
+    var f = this.files && this.files[0];
+    this.value = "";
+    handlePhotoFile(f);
   });
+  // 桌面流：截图后直接 Ctrl/⌘+V 粘贴进作答区
+  document.addEventListener("paste", function (e) {
+    if (!viewIsQuiz() || !cur) return;
+    var items = (e.clipboardData && e.clipboardData.items) || [];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].type && /^image\//.test(items[i].type)) {
+        var f = items[i].getAsFile();
+        if (f) { e.preventDefault(); handlePhotoFile(f); }
+        return;
+      }
+    }
+  });
+  // 桌面流：照片直接拖到作答面板
+  (function () {
+    var ap = $("answer-panel");
+    ap.addEventListener("dragover", function (e) { e.preventDefault(); ap.classList.add("dragging"); });
+    ap.addEventListener("dragleave", function (e) {
+      if (!ap.contains(e.relatedTarget)) ap.classList.remove("dragging");
+    });
+    ap.addEventListener("drop", function (e) {
+      e.preventDefault();
+      ap.classList.remove("dragging");
+      var f = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f && /^image\//.test(f.type)) handlePhotoFile(f);
+      else toast("请拖入图片文件");
+    });
+  })();
+
   function compressImage(file, ok, fail) {
     var img = new Image();
     var url = URL.createObjectURL(file);
@@ -697,6 +941,10 @@
     }).finally(function () {
       btn.disabled = false;
       btn.textContent = "AI 评判打分";
+      // 评分卡出来后自动滚到评分区（尊重系统减弱动态效果设置）
+      setTimeout(function () {
+        $("grade-area").scrollIntoView({ behavior: ANIM ? "smooth" : "auto", block: "start" });
+      }, 120);
     });
   }
 
@@ -813,6 +1061,7 @@
     $("set-key").value = s.key || "";
     $("set-model").value = s.model || "";
     $("mask").classList.add("show");
+    setTimeout(function () { $("set-base").focus(); }, 60);
   }
   $("btn-settings").addEventListener("click", openSettings);
   $("btn-cancel-settings").addEventListener("click", function () { $("mask").classList.remove("show"); });
@@ -821,11 +1070,19 @@
     $("mask").classList.remove("show");
     toast("已保存（仅存在本机浏览器）");
   });
+  // 弹层内回车 = 保存
+  $("sheet").addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && e.target && e.target.tagName === "INPUT") {
+      e.preventDefault();
+      $("btn-save-settings").click();
+    }
+  });
   $("mask").addEventListener("click", function (e) { if (e.target === this) this.classList.remove("show"); });
 
   // ================= 启动 =================
   // 调试/测试钩子（只读暴露内部纯函数，便于浏览器端验证）
-  window.__slDebug = { updateWeak: updateWeak, renderGrade: renderGrade, buildPrompt: buildPrompt, renderWeakPanel: renderWeakPanel, getStore: function () { return store; } };
+  window.__slDebug = { updateWeak: updateWeak, renderGrade: renderGrade, buildPrompt: buildPrompt, renderWeakPanel: renderWeakPanel, getStore: function () { return store; }, backToList: backToList };
+  applyPrefs();
   renderTabs();
   renderList();
 })();
