@@ -136,6 +136,13 @@
   .weak-item{display:flex;align-items:baseline;gap:8px;font-size:14px;margin:8px 0}
   .weak-cnt{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--sub);font-size:13px;white-space:nowrap}
   .weak-src{font-size:12px;color:var(--sub)}
+  .paper-head{
+    font-size:14px;font-weight:700;color:var(--amber);letter-spacing:1px;
+    padding:16px 2px 8px;display:flex;align-items:baseline;gap:8px;
+  }
+  .paper-head small{font-size:12px;color:var(--sub);font-weight:400}
+  .photo-row{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+  .photo-hint{font-size:12px;color:var(--sub)}
 
   /* ---------- 参考答案 ---------- */
   .ref-body{font-size:14px;white-space:pre-wrap;color:#4a443c}
@@ -208,7 +215,12 @@
       <span class="timer" id="timer">00:00</span>
       <span class="word-count" id="word-count">0 字</span>
     </div>
-    <textarea id="answer-input" placeholder="在这里写下你的答案…（自动保存草稿，动笔自动计时）"></textarea>
+    <textarea id="answer-input" placeholder="在这里写下你的答案…（自动保存草稿，动笔自动计时；也可以在纸上写完点下方拍照识别）"></textarea>
+    <div class="photo-row">
+      <button class="btn btn-ghost" id="btn-photo">📷 拍照识别手写</button>
+      <span class="photo-hint">纸上写完拍照，AI 转写进作答框（需视觉模型，如 glm-4v / gpt-4o）</span>
+      <input type="file" id="photo-file" accept="image/*" style="display:none">
+    </div>
     <div class="actions">
       <button class="btn btn-primary" id="btn-grade">AI 评判打分</button>
       <button class="btn btn-ghost" id="btn-copy-prompt">复制提示词</button>
@@ -228,7 +240,7 @@
 <div class="mask" id="mask">
   <div class="sheet">
     <h2>AI 设置</h2>
-    <p class="hint">填写任意「OpenAI 兼容」接口即可（DeepSeek / Kimi / GLM / OpenAI 等）。API Key 只保存在你本机浏览器，不会上传到任何服务器。若接口不支持浏览器直连（CORS），可用「复制提示词」按钮把题目+你的答案粘给任意 AI 应用。</p>
+    <p class="hint">填写任意「OpenAI 兼容」接口即可（DeepSeek / Kimi / GLM / OpenAI 等）。API Key 只保存在你本机浏览器，不会上传到任何服务器。拍照识别手写需所用模型支持图片输入（视觉模型，如 glm-4v / gpt-4o / qwen-vl）。若接口不支持浏览器直连（CORS），可用「复制提示词」按钮把题目+你的答案粘给任意 AI 应用。</p>
     <div class="field">
       <label>接口地址 Base URL</label>
       <input id="set-base" placeholder="https://api.deepseek.com/v1">
@@ -254,6 +266,11 @@
 <script src="data/questions-shenlun-gkds.js"></script>
 <script src="data/questions-shenlun-gkzf.js"></script>
 <script src="data/questions-shenlun-tj.js"></script>
+<script src="data/questions-shenlun-gkfs-pre.js"></script>
+<script src="data/questions-shenlun-gkds-pre.js"></script>
+<script src="data/questions-shenlun-tj-pre.js"></script>
+<script src="data/questions-shenlun-jl-pre.js"></script>
+<script src="data/questions-shenlun-jl.js"></script>
 <script>
 (function () {
   "use strict";
@@ -261,17 +278,30 @@
   // ================= 数据 =================
   var VOLUMES = [
     { key: "all",  label: "全部" },
-    { key: "gkfs", label: "国考副省", file: "QUESTIONS_SHENLUN_GKFS" },
-    { key: "gkds", label: "国考地市", file: "QUESTIONS_SHENLUN_GKDS" },
-    { key: "gkzf", label: "国考执法", file: "QUESTIONS_SHENLUN_GKZF" },
-    { key: "tj",   label: "天津卷",   file: "QUESTIONS_SHENLUN_TJ" }
+    { key: "gkfs", label: "国考副省" },
+    { key: "gkds", label: "国考地市" },
+    { key: "gkzf", label: "国考执法" },
+    { key: "tj",   label: "天津卷" },
+    { key: "jl",   label: "吉林卷" }
   ];
   var qs = [];
-  VOLUMES.forEach(function (v) {
-    var db = window[v.file];
-    if (!db) return;
+  // 扫描全部题库文件（含分年份数据块），卷别与年份从 source 解析
+  Object.keys(window).forEach(function (k) {
+    if (!/^QUESTIONS_SHENLUN_/.test(k)) return;
+    var db = window[k];
+    if (!db || !db.questions) return;
     db.questions.forEach(function (q) {
-      qs.push({ q: q, vol: v.key, material: db.materials[q.materialId] || "" });
+      var s = q.source || "";
+      var vol = /副省级/.test(s) ? "gkfs" : /地市级/.test(s) ? "gkds" :
+                /执法/.test(s) ? "gkzf" : /天津/.test(s) ? "tj" :
+                /吉林/.test(s) ? "jl" : "other";
+      var pm = /^(\d{4})(.+?)\s*·\s*第(\d+)题/.exec(s);
+      qs.push({
+        q: q, vol: vol, material: (db.materials || {})[q.materialId] || "",
+        year: pm ? parseInt(pm[1], 10) : 0,
+        paper: pm ? pm[2].trim() : "其他",
+        no: pm ? parseInt(pm[3], 10) : 99
+      });
     });
   });
 
@@ -338,23 +368,42 @@
     var el = $("qlist");
     el.innerHTML = "";
     renderWeakPanel();
-    qs.filter(function (it) { return curTab === "all" || it.vol === curTab; })
-      .sort(function (a, b) { return a.q.source < b.q.source ? -1 : 1; })
-      .forEach(function (it) {
-        var g = store.grades[it.q.id];
-        var d = store.drafts[it.q.id];
-        var card = document.createElement("div");
-        card.className = "qcard";
-        var scoreTxt = g ? '<span class="badge done">已评分 ' + g.score + "/" + g.total + "</span>" :
-                       (d && d.text && d.text.trim() ? '<span class="badge draft">有草稿</span>' : "");
-        card.innerHTML =
-          '<div class="src">' + esc(it.q.source) + "</div>" +
-          '<div class="qt">' + esc(it.q.question.split("\n")[0]) + "</div>" +
-          '<div class="meta"><span class="badge">' + parseFullScore(it.q.question) + " 分</span>" +
-          (parseLimit(it.q.question) ? "<span>≤" + parseLimit(it.q.question) + "字</span>" : "") +
-          scoreTxt + "</div>";
-        card.addEventListener("click", function () { openQuiz(it); });
-        el.appendChild(card);
+    var items = qs.filter(function (it) { return curTab === "all" || it.vol === curTab; });
+    // 按「考试+年份」分卷，像卷子一样陈列；年份倒序，卷内按题号正序
+    var groups = {};
+    items.forEach(function (it) {
+      var key = it.year + "|" + it.paper;
+      (groups[key] = groups[key] || []).push(it);
+    });
+    Object.keys(groups).map(function (k) {
+      var parts = k.split("|");
+      return { year: parseInt(parts[0], 10), paper: parts[1], items: groups[k] };
+    }).sort(function (a, b) { return b.year - a.year || (a.paper < b.paper ? -1 : 1); })
+      .forEach(function (grp) {
+        var head = document.createElement("div");
+        head.className = "paper-head";
+        var hs = document.createElement("span");
+        hs.textContent = grp.year + " " + grp.paper;
+        var hn = document.createElement("small");
+        hn.textContent = grp.items.length + " 题 · 点开作答";
+        head.appendChild(hs); head.appendChild(hn);
+        el.appendChild(head);
+        grp.items.sort(function (a, b) { return a.no - b.no; }).forEach(function (it) {
+          var g = store.grades[it.q.id];
+          var d = store.drafts[it.q.id];
+          var card = document.createElement("div");
+          card.className = "qcard";
+          var scoreTxt = g ? '<span class="badge done">已评分 ' + g.score + "/" + g.total + "</span>" :
+                         (d && d.text && d.text.trim() ? '<span class="badge draft">有草稿</span>' : "");
+          card.innerHTML =
+            '<div class="src">' + esc(it.q.source) + "</div>" +
+            '<div class="qt">' + esc(it.q.question.split("\n")[0]) + "</div>" +
+            '<div class="meta"><span class="badge">' + parseFullScore(it.q.question) + " 分</span>" +
+            (parseLimit(it.q.question) ? "<span>≤" + parseLimit(it.q.question) + "字</span>" : "") +
+            scoreTxt + "</div>";
+          card.addEventListener("click", function () { openQuiz(it); });
+          el.appendChild(card);
+        });
       });
     if (!el.children.length) el.innerHTML = '<p style="color:var(--sub);font-size:14px;padding:20px 0">该卷别暂无题目</p>';
   }
@@ -434,6 +483,90 @@
     showView("list");
     renderList();
   });
+
+  // ================= 拍照识别手写作答 =================
+  $("btn-photo").addEventListener("click", function () { $("photo-file").click(); });
+  $("photo-file").addEventListener("change", function () {
+    var f = this.files && this.files[0];
+    this.value = "";
+    if (!f) return;
+    var s = loadSettings();
+    if (!s.base || !s.key || !s.model) {
+      toast("拍照识别需要先在「AI 设置」配置接口");
+      openSettings();
+      return;
+    }
+    var btn = $("btn-photo");
+    btn.disabled = true;
+    btn.textContent = "识别中…";
+    compressImage(f, function (dataUrl) {
+      transcribe(s, dataUrl, function (text) {
+        btn.disabled = false;
+        btn.textContent = "📷 拍照识别手写";
+        var ta = $("answer-input");
+        ta.value = ta.value.trim() ? ta.value.replace(/\s+$/, "") + "\n" + text : text;
+        if (!typing) {
+          typing = true;
+          stopTimer();
+          timerInt = setInterval(function () { elapsed++; renderTimer(); }, 1000);
+        }
+        renderWordCount();
+        if (cur) { store.drafts[cur.q.id] = { text: ta.value, secs: elapsed }; save(); }
+        toast("识别完成，请核对转写内容再评判");
+      }, function (err) {
+        btn.disabled = false;
+        btn.textContent = "📷 拍照识别手写";
+        toast("识别失败：" + err);
+      });
+    }, function (err) {
+      btn.disabled = false;
+      btn.textContent = "📷 拍照识别手写";
+      toast("读取图片失败：" + err);
+    });
+  });
+  function compressImage(file, ok, fail) {
+    var img = new Image();
+    var url = URL.createObjectURL(file);
+    img.onload = function () {
+      try {
+        var max = 1600, w = img.width, h = img.height, scale = Math.min(1, max / Math.max(w, h));
+        var c = document.createElement("canvas");
+        c.width = Math.round(w * scale);
+        c.height = Math.round(h * scale);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        ok(c.toDataURL("image/jpeg", 0.85));
+      } catch (e) { URL.revokeObjectURL(url); fail(e.message || e); }
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); fail("图片无法读取"); };
+    img.src = url;
+  }
+  function transcribe(s, dataUrl, ok, fail) {
+    var url = s.base.replace(/\/+$/, "") + "/chat/completions";
+    fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + s.key },
+      body: JSON.stringify({
+        model: s.model,
+        temperature: 0,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "text", text: "转写图片中的申论手写作答文字。只输出转写出的正文本身，保持原文分段与措辞，不要任何点评、标题或说明。如图片中没有作答内容，只输出：图中没有识别到作答文字。" },
+            { type: "image_url", image_url: { url: dataUrl } }
+          ]
+        }]
+      })
+    }).then(function (r) {
+      return r.text().then(function (t) { return { ok: r.ok, status: r.status, text: t }; });
+    }).then(function (res) {
+      if (!res.ok) throw new Error("接口返回 " + res.status + "：" + res.text.slice(0, 200));
+      var data = JSON.parse(res.text);
+      var content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || "";
+      if (!content.trim()) throw new Error("模型未返回内容");
+      ok(content.trim());
+    }).catch(function (e) { fail(e.message || e); });
+  }
 
   // ================= 提示词构建 =================
   // 失分点编号 → 名称（分类体系来自 coffe-d/Shenlun.skill，MIT License）
