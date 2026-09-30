@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>申论练笔 · AI 评判</title>
+<style>
+  :root{
+    --ink:#2b2620; --sub:#8a8175; --paper:#faf7f1; --card:#fff; --line:#e8e1d5;
+    --amber:#b4832a; --amber-soft:#f5ecd9; --good:#2e7d4f; --bad:#b03a2e;
+    --radius:14px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{
+    font-family:-apple-system,"PingFang SC","Helvetica Neue",sans-serif;
+    background:var(--paper); color:var(--ink); line-height:1.7;
+    padding-bottom:48px;
+  }
+  .wrap{max-width:680px;margin:0 auto;padding:0 16px}
+
+  /* ---------- 顶栏 ---------- */
+  header{
+    position:sticky;top:0;z-index:20;background:rgba(250,247,241,.92);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--line);
+  }
+  .topbar{display:flex;align-items:center;gap:10px;padding:12px 0}
+  .topbar h1{font-size:18px;font-weight:700;letter-spacing:1px;flex:1}
+  .topbar h1 .zhang{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:26px;height:26px;border-radius:6px;background:var(--amber);color:#fff;
+    font-size:14px;margin-right:8px;vertical-align:-5px;
+  }
+  .btn-mini{
+    border:1px solid var(--line);background:var(--card);color:var(--sub);
+    border-radius:8px;padding:5px 12px;font-size:13px;cursor:pointer;
+  }
+  .btn-mini:active{background:var(--amber-soft)}
+
+  /* ---------- 卷别筛选 ---------- */
+  .tabs{display:flex;gap:8px;padding:10px 0 4px;overflow-x:auto;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{
+    flex-shrink:0;border:1px solid var(--line);background:var(--card);
+    border-radius:999px;padding:5px 14px;font-size:13px;color:var(--sub);cursor:pointer;
+  }
+  .tab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+  /* ---------- 题目列表 ---------- */
+  .qlist{padding:12px 0}
+  .qcard{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px 16px;margin-bottom:10px;cursor:pointer;
+  }
+  .qcard:active{border-color:var(--amber)}
+  .qcard .src{font-size:12px;color:var(--amber);margin-bottom:4px}
+  .qcard .qt{font-size:15px;font-weight:600;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .qcard .meta{font-size:12px;color:var(--sub);margin-top:6px;display:flex;gap:10px;align-items:center}
+  .badge{
+    font-size:11px;padding:1px 8px;border-radius:999px;
+    background:var(--amber-soft);color:var(--amber);
+  }
+  .badge.done{background:#e6f2ea;color:var(--good)}
+  .badge.draft{background:#efece6;color:var(--sub)}
+
+  /* ---------- 详情页 ---------- */
+  .view{display:none}
+  .view.show{display:block}
+  .crumb{font-size:12px;color:var(--sub);padding:12px 0 4px;cursor:pointer}
+  .panel{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px 16px;margin-bottom:12px;
+  }
+  .panel h3{
+    font-size:13px;color:var(--amber);letter-spacing:1px;margin-bottom:8px;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .fold-toggle{cursor:pointer;color:var(--sub);font-size:12px;user-select:none}
+  .material{
+    font-size:14px;color:#4a443c;white-space:pre-wrap;
+    max-height:260px;overflow-y:auto;padding:10px 12px;
+    background:#fbf9f4;border-radius:10px;border:1px solid #f0e9dc;
+  }
+  .folded .material{display:none}
+  .question-text{font-size:15px;font-weight:600;white-space:pre-wrap}
+  .timer-row{display:flex;align-items:center;gap:10px;margin:12px 0 8px}
+  .timer{font-variant-numeric:tabular-nums;font-size:15px;color:var(--sub)}
+  .timer.run{color:var(--amber)}
+  .word-count{margin-left:auto;font-size:13px;color:var(--sub)}
+  .word-count.over{color:var(--bad)}
+  textarea{
+    width:100%;min-height:220px;resize:vertical;
+    font-size:15px;font-family:inherit;line-height:1.8;
+    border:1px solid var(--line);border-radius:10px;padding:12px;
+    background:#fffdf8;color:var(--ink);outline:none;
+  }
+  textarea:focus{border-color:var(--amber)}
+  .actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .btn{
+    border:none;border-radius:10px;padding:11px 20px;font-size:15px;
+    cursor:pointer;font-weight:600;
+  }
+  .btn-primary{background:var(--amber);color:#fff;flex:1;min-width:150px}
+  .btn-primary:disabled{opacity:.5;cursor:default}
+  .btn-ghost{background:var(--card);border:1px solid var(--line);color:var(--sub)}
+  .btn-ghost:active{background:var(--amber-soft)}
+
+  /* ---------- 评判结果 ---------- */
+  .score-card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:18px 16px;margin-bottom:12px;
+  }
+  .score-head{display:flex;align-items:center;gap:16px;margin-bottom:10px}
+  .score-big{
+    font-size:40px;font-weight:800;color:var(--amber);font-variant-numeric:tabular-nums;
+    line-height:1;
+  }
+  .score-big small{font-size:16px;color:var(--sub);font-weight:400}
+  .score-verdict{font-size:14px;color:var(--ink);flex:1}
+  .dim{margin:8px 0}
+  .dim-row{display:flex;align-items:baseline;gap:8px;font-size:14px}
+  .dim-name{font-weight:600}
+  .dim-score{color:var(--amber);font-variant-numeric:tabular-nums}
+  .dim-bar{height:5px;background:#f0e9dc;border-radius:99px;margin:4px 0;overflow:hidden}
+  .dim-bar i{display:block;height:100%;background:var(--amber);border-radius:99px}
+  .dim-comment{font-size:13px;color:var(--sub)}
+  .sec-title{font-size:13px;font-weight:700;margin:14px 0 6px;letter-spacing:1px}
+  .sec-title.good{color:var(--good)} .sec-title.bad{color:var(--bad)}
+  .li{font-size:14px;padding-left:1.1em;position:relative;margin:4px 0;color:#4a443c}
+  .li::before{content:"·";position:absolute;left:0;font-weight:700}
+  .summary{font-size:14px;color:#4a443c;white-space:pre-wrap}
+  .err{color:var(--bad);font-size:14px;white-space:pre-wrap}
+
+  /* ---------- 参考答案 ---------- */
+  .ref-body{font-size:14px;white-space:pre-wrap;color:#4a443c}
+
+  /* ---------- 设置弹层 ---------- */
+  .mask{
+    position:fixed;inset:0;background:rgba(30,25,18,.45);z-index:50;
+    display:none;align-items:flex-end;justify-content:center;
+  }
+  .mask.show{display:flex}
+  .sheet{
+    background:var(--paper);width:100%;max-width:680px;
+    border-radius:18px 18px 0 0;padding:20px 18px 28px;
+  }
+  .sheet h2{font-size:16px;margin-bottom:4px}
+  .sheet .hint{font-size:12px;color:var(--sub);margin-bottom:14px}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:13px;color:var(--sub);margin-bottom:4px}
+  .field input{
+    width:100%;border:1px solid var(--line);border-radius:10px;
+    padding:10px 12px;font-size:14px;background:#fff;outline:none;color:var(--ink);
+  }
+  .field input:focus{border-color:var(--amber)}
+  .sheet .actions{margin-top:6px}
+  .toast{
+    position:fixed;left:50%;bottom:80px;transform:translateX(-50%);
+    background:rgba(43,38,32,.92);color:#fff;font-size:13px;
+    padding:9px 18px;border-radius:99px;z-index:99;
+    opacity:0;transition:opacity .25s;pointer-events:none;max-width:80vw;
+  }
+  .toast.show{opacity:1}
+  @media(min-width:700px){
+    .mask{align-items:center;padding:0 16px}
+    .sheet{border-radius:18px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap topbar">
+    <h1><span class="zhang">阅</span>申论练笔 · AI 评判</h1>
+    <button class="btn-mini" id="btn-settings">AI 设置</button>
+  </div>
+</header>
+
+<!-- ============ 题目列表 ============ -->
+<div class="wrap view show" id="view-list">
+  <div class="tabs" id="tabs"></div>
+  <div class="qlist" id="qlist"></div>
+</div>
+
+<!-- ============ 练题详情 ============ -->
+<div class="wrap view" id="view-quiz">
+  <div class="crumb" id="crumb">← 返回题目列表</div>
+
+  <div class="panel" id="material-panel">
+    <h3><span>给定资料</span><span class="fold-toggle" id="fold-toggle">收起</span></h3>
+    <div class="material" id="material-body"></div>
+  </div>
+
+  <div class="panel">
+    <h3><span>题目</span><span id="q-full"></span></h3>
+    <div class="question-text" id="question-text"></div>
+    <div class="timer-row">
+      <span class="timer" id="timer">00:00</span>
+      <span class="word-count" id="word-count">0 字</span>
+    </div>
+    <textarea id="answer-input" placeholder="在这里写下你的答案…（自动保存草稿，动笔自动计时）"></textarea>
+    <div class="actions">
+      <button class="btn btn-primary" id="btn-grade">AI 评判打分</button>
+      <button class="btn btn-ghost" id="btn-copy-prompt">复制提示词</button>
+      <button class="btn btn-ghost" id="btn-ref">看参考答案</button>
+    </div>
+  </div>
+
+  <div id="grade-area"></div>
+
+  <div class="panel" id="ref-panel" style="display:none">
+    <h3><span>参考答案与解析</span></h3>
+    <div class="ref-body" id="ref-body"></div>
+  </div>
+</div>
+
+<!-- ============ AI 设置 ============ -->
+<div class="mask" id="mask">
+  <div class="sheet">
+    <h2>AI 设置</h2>
+    <p class="hint">填写任意「OpenAI 兼容」接口即可（DeepSeek / Kimi / GLM / OpenAI 等）。API Key 只保存在你本机浏览器，不会上传到任何服务器。若接口不支持浏览器直连（CORS），可用「复制提示词」按钮把题目+你的答案粘给任意 AI 应用。</p>
+    <div class="field">
+      <label>接口地址 Base URL</label>
+      <input id="set-base" placeholder="https://api.deepseek.com/v1">
+    </div>
+    <div class="field">
+      <label>API Key</label>
+      <input id="set-key" type="password" placeholder="sk-…">
+    </div>
+    <div class="field">
+      <label>模型名称</label>
+      <input id="set-model" placeholder="deepseek-chat">
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary" id="btn-save-settings">保存</button>
+      <button class="btn btn-ghost" id="btn-cancel-settings">取消</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="data/questions-shenlun-gkfs.js"></script>
+<script src="data/questions-shenlun-gkds.js"></script>
+<script src="data/questions-shenlun-gkzf.js"></script>
+<script src="data/questions-shenlun-tj.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // ================= 数据 =================
+  var VOLUMES = [
+    { key: "all",  label: "全部" },
+    { key: "gkfs", label: "国考副省", file: "QUESTIONS_SHENLUN_GKFS" },
+    { key: "gkds", label: "国考地市", file: "QUESTIONS_SHENLUN_GKDS" },
+    { key: "gkzf", label: "国考执法", file: "QUESTIONS_SHENLUN_GKZF" },
+    { key: "tj",   label: "天津卷",   file: "QUESTIONS_SHENLUN_TJ" }
+  ];
+  var qs = [];
+  VOLUMES.forEach(function (v) {
+    var db = window[v.file];
+    if (!db) return;
+    db.questions.forEach(function (q) {
+      qs.push({ q: q, vol: v.key, material: db.materials[q.materialId] || "" });
+    });
+  });
+
+  // ================= 本地存储 =================
+  var STORE = "shenlun-simple-v1";
+  var store = { drafts: {}, grades: {} };
+  try { store = Object.assign(store, JSON.parse(localStorage.getItem(STORE) || "{}")); } catch (e) {}
+  function save() { localStorage.setItem(STORE, JSON.stringify(store)); }
+
+  var SET_KEY = "shenlun-simple-settings";
+  function loadSettings() {
+    try { return JSON.parse(localStorage.getItem(SET_KEY) || "{}"); } catch (e) { return {}; }
+  }
+  function saveSettings(s) { localStorage.setItem(SET_KEY, JSON.stringify(s)); }
+
+  // ================= 工具 =================
+  var $ = function (id) { return document.getElementById(id); };
+  var cur = null;          // 当前题目包装对象
+  var timerInt = null, elapsed = 0, typing = false;
+  var curTab = "all";
+
+  var toastInt = null;
+  function toast(msg) {
+    var t = $("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toastInt);
+    toastInt = setTimeout(function () { t.classList.remove("show"); }, 2200);
+  }
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function parseLimit(question) {
+    var m = /不超过\s*(\d+)\s*字/.exec(question);
+    return m ? parseInt(m[1], 10) : 0;
+  }
+  function parseFullScore(question) {
+    var m = /（(\d+)分）/.exec(question) || /(\d+)\s*分/.exec(question);
+    return m ? parseInt(m[1], 10) : 20;
+  }
+  function countWords(text) { return text.replace(/\s/g, "").length; }
+
+  function extractRef(analysis) {
+    var m = /【参考(?:答案|提纲)】([\s\S]*?)(?=\n【|$)/.exec(analysis);
+    return m ? m[1].trim() : analysis;
+  }
+
+  // ================= 列表视图 =================
+  function renderTabs() {
+    var el = $("tabs");
+    el.innerHTML = "";
+    VOLUMES.forEach(function (v) {
+      var b = document.createElement("button");
+      b.className = "tab" + (curTab === v.key ? " on" : "");
+      b.textContent = v.label;
+      b.addEventListener("click", function () { curTab = v.key; renderTabs(); renderList(); });
+      el.appendChild(b);
+    });
+  }
+
+  function renderList() {
+    var el = $("qlist");
+    el.innerHTML = "";
+    qs.filter(function (it) { return curTab === "all" || it.vol === curTab; })
+      .sort(function (a, b) { return a.q.source < b.q.source ? -1 : 1; })
+      .forEach(function (it) {
+        var g = store.grades[it.q.id];
+        var d = store.drafts[it.q.id];
+        var card = document.createElement("div");
+        card.className = "qcard";
+        var scoreTxt = g ? '<span class="badge done">已评分 ' + g.score + "/" + g.total + "</span>" :
+                       (d && d.text && d.text.trim() ? '<span class="badge draft">有草稿</span>' : "");
+        card.innerHTML =
+          '<div class="src">' + esc(it.q.source) + "</div>" +
+          '<div class="qt">' + esc(it.q.question.split("\n")[0]) + "</div>" +
+          '<div class="meta"><span class="badge">' + parseFullScore(it.q.question) + " 分</span>" +
+          (parseLimit(it.q.question) ? "<span>≤" + parseLimit(it.q.question) + "字</span>" : "") +
+          scoreTxt + "</div>";
+        card.addEventListener("click", function () { openQuiz(it); });
+        el.appendChild(card);
+      });
+    if (!el.children.length) el.innerHTML = '<p style="color:var(--sub);font-size:14px;padding:20px 0">该卷别暂无题目</p>';
+  }
+
+  // ================= 详情视图 =================
+  function openQuiz(it) {
+    cur = it;
+    showView("quiz");
+    $("crumb").textContent = "← 返回题目列表 · " + it.q.source;
+    $("material-body").textContent = it.material || "（本题材料略）";
+    $("material-panel").classList.remove("folded");
+    $("fold-toggle").textContent = "收起";
+    $("q-full").textContent = parseFullScore(it.q.question) + " 分";
+    $("question-text").textContent = it.q.question;
+    var draft = store.drafts[it.q.id] || {};
+    $("answer-input").value = draft.text || "";
+    elapsed = draft.secs || 0;
+    typing = false;
+    renderTimer();
+    renderWordCount();
+    $("grade-area").innerHTML = "";
+    var g = store.grades[it.q.id];
+    if (g) renderGrade(g, true);
+    $("ref-body").textContent = it.q.analysis;
+    $("ref-panel").style.display = "none";
+    $("btn-ref").textContent = "看参考答案";
+    window.scrollTo(0, 0);
+  }
+
+  function showView(name) {
+    $("view-list").classList.toggle("show", name === "list");
+    $("view-quiz").classList.toggle("show", name === "quiz");
+  }
+
+  function stopTimer() {
+    if (timerInt) { clearInterval(timerInt); timerInt = null; }
+  }
+  function renderTimer() {
+    var t = $("timer");
+    var m = Math.floor(elapsed / 60), s = elapsed % 60;
+    t.textContent = (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+    t.classList.toggle("run", !!timerInt);
+  }
+  function renderWordCount() {
+    var n = countWords($("answer-input").value);
+    var limit = cur ? parseLimit(cur.q.question) : 0;
+    var el = $("word-count");
+    el.textContent = limit ? n + " / " + limit + " 字" : n + " 字";
+    el.classList.toggle("over", limit > 0 && n > limit);
+  }
+
+  $("answer-input").addEventListener("input", function () {
+    if (!typing) {
+      typing = true;
+      stopTimer();
+      timerInt = setInterval(function () { elapsed++; renderTimer(); }, 1000);
+    }
+    renderWordCount();
+    if (cur) {
+      store.drafts[cur.q.id] = { text: $("answer-input").value, secs: elapsed };
+      save();
+    }
+  });
+  $("fold-toggle").addEventListener("click", function () {
+    var p = $("material-panel");
+    var folded = p.classList.toggle("folded");
+    this.textContent = folded ? "展开" : "收起";
+  });
+  $("btn-ref").addEventListener("click", function () {
+    var p = $("ref-panel");
+    var show = p.style.display === "none";
+    p.style.display = show ? "block" : "none";
+    this.textContent = show ? "收起参考答案" : "看参考答案";
+  });
+  $("crumb").addEventListener("click", function () {
+    stopTimer();
+    showView("list");
+    renderList();
+  });
+
+  // ================= 提示词构建 =================
+  function buildPrompt(q, answer) {
+    var limit = parseLimit(q.question);
+    return [
+      "你是一名资深申论阅卷老师，请严格按公务员考试申论阅卷标准评判下面这份考生作答。",
+      "",
+      "【题目】",
+      q.question,
+      "",
+      "【满分】" + parseFullScore(q.question) + " 分" + (limit ? "（字数要求：不超过 " + limit + " 字）" : ""),
+      "",
+      "【阅卷参考（含参考答案与评分要点）】",
+      q.analysis,
+      "",
+      "【考生作答】",
+      answer || "（考生未作答）",
+      "",
+      "请先按评分要点逐条对照，再输出。只输出一个 JSON 对象，不要输出任何其它文字，格式如下：",
+      '{"score":<得分数字>,"total":<满分数字>,"verdict":"一句话总评（20字左右）","dimensions":[{"name":"维度名（如 要点全面性/条理结构/语言规范/卷面贴合度）","score":<数字>,"full":<该维度满分>,"comment":"简短点评"}],"strengths":["亮点1","亮点2"],"problems":["问题1（具体到漏了哪个要点或写错了什么）","问题2"],"suggestion":"下一步提升建议（2-3句，具体可操作）"}'
+    ].join("\n");
+  }
+
+  // ================= 复制提示词（无 API 时的兜底） =================
+  $("btn-copy-prompt").addEventListener("click", function () {
+    if (!cur) return;
+    var text = buildPrompt(cur.q, $("answer-input").value);
+    function fallbackCopy() {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta);
+      toast(ok ? "提示词已复制，粘贴给任意 AI 即可获得评分" : "复制失败，请手动选择文本复制");
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        toast("提示词已复制，粘贴给任意 AI 即可获得评分");
+      }, fallbackCopy);
+    } else fallbackCopy();
+  });
+
+  // ================= AI 评判 =================
+  $("btn-grade").addEventListener("click", function () {
+    if (!cur) return;
+    var answer = $("answer-input").value.trim();
+    if (!answer) { toast("请先写下你的答案再评判"); return; }
+    var s = loadSettings();
+    if (!s.base || !s.key || !s.model) {
+      toast("请先在「AI 设置」里填好接口信息");
+      openSettings();
+      return;
+    }
+    grade(s, cur.q, answer);
+  });
+
+  function grade(s, q, answer) {
+    var btn = $("btn-grade");
+    btn.disabled = true;
+    btn.textContent = "AI 阅卷中…";
+    $("grade-area").innerHTML =
+      '<div class="panel"><p style="color:var(--sub);font-size:14px">正在按申论评分标准逐条对照…（约需 10-30 秒）</p></div>';
+    var url = s.base.replace(/\/+$/, "") + "/chat/completions";
+    fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + s.key },
+      body: JSON.stringify({
+        model: s.model,
+        temperature: 0.3,
+        messages: [
+          { role: "system", content: "你是公务员考试申论阅卷组的主阅卷人，评分严格、客观、具体，擅长指出考生遗漏的要点。只输出 JSON。" },
+          { role: "user", content: buildPrompt(q, answer) }
+        ]
+      })
+    }).then(function (r) {
+      return r.text().then(function (t) { return { ok: r.ok, status: r.status, text: t }; });
+    }).then(function (res) {
+      if (!res.ok) throw new Error("接口返回 " + res.status + "：" + res.text.slice(0, 300));
+      var data = JSON.parse(res.text);
+      var content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || "";
+      var g = parseGrade(content, q);
+      if (!g) {
+        $("grade-area").innerHTML = '<div class="panel"><p class="err">AI 返回内容无法解析为评分，原始回复：</p><p class="summary">' + esc(content) + "</p></div>";
+        return;
+      }
+      g.at = Date.now();
+      g.secs = elapsed;
+      store.grades[q.id] = g;
+      save();
+      renderGrade(g, false);
+    }).catch(function (e) {
+      $("grade-area").innerHTML =
+        '<div class="panel"><p class="err">评判失败：' + esc(e.message || e) + "</p>" +
+        '<p style="font-size:13px;color:var(--sub);margin-top:8px">常见原因：Key 无效 / 接口地址或模型名不对 / 接口不允许浏览器直连（CORS）。可改用「复制提示词」粘贴给任意 AI。</p></div>';
+    }).finally(function () {
+      btn.disabled = false;
+      btn.textContent = "AI 评判打分";
+    });
+  }
+
+  function parseGrade(content, q) {
+    var a = content.indexOf("{"), b = content.lastIndexOf("}");
+    if (a < 0 || b <= a) return null;
+    try {
+      var g = JSON.parse(content.slice(a, b + 1));
+      if (typeof g.score !== "number") return null;
+      g.total = g.total || parseFullScore(q.question);
+      g.dimensions = g.dimensions || [];
+      g.strengths = g.strengths || [];
+      g.problems = g.problems || [];
+      return g;
+    } catch (e) { return null; }
+  }
+
+  function renderGrade(g, isHistory) {
+    var h = [];
+    h.push('<div class="score-card">');
+    h.push('<div class="score-head"><span class="score-big">' + g.score + "<small> / " + g.total + '</small></span>' +
+      '<span class="score-verdict">' + esc(g.verdict || "") + (isHistory ? '<br><span style="font-size:12px;color:var(--sub)">（上次评判结果）</span>' : "") + "</span></div>");
+    (g.dimensions || []).forEach(function (d) {
+      h.push('<div class="dim"><div class="dim-row"><span class="dim-name">' + esc(d.name) + '</span><span class="dim-score">' +
+        esc(d.score) + "/" + esc(d.full) + '</span></div>' +
+        '<div class="dim-bar"><i style="width:' + (d.full ? Math.min(100, d.score / d.full * 100) : 0) + '%"></i></div>' +
+        '<div class="dim-comment">' + esc(d.comment || "") + "</div></div>");
+    });
+    if (g.strengths && g.strengths.length) {
+      h.push('<div class="sec-title good">✦ 做得好的</div>');
+      g.strengths.forEach(function (x) { h.push('<div class="li">' + esc(x) + "</div>"); });
+    }
+    if (g.problems && g.problems.length) {
+      h.push('<div class="sec-title bad">✧ 扣分点</div>');
+      g.problems.forEach(function (x) { h.push('<div class="li">' + esc(x) + "</div>"); });
+    }
+    if (g.suggestion) {
+      h.push('<div class="sec-title" style="color:var(--amber)">✎ 提升建议</div><div class="summary">' + esc(g.suggestion) + "</div>");
+    }
+    h.push("</div>");
+    $("grade-area").innerHTML = h.join("");
+  }
+
+  // ================= 设置 =================
+  function openSettings() {
+    var s = loadSettings();
+    $("set-base").value = s.base || "";
+    $("set-key").value = s.key || "";
+    $("set-model").value = s.model || "";
+    $("mask").classList.add("show");
+  }
+  $("btn-settings").addEventListener("click", openSettings);
+  $("btn-cancel-settings").addEventListener("click", function () { $("mask").classList.remove("show"); });
+  $("btn-save-settings").addEventListener("click", function () {
+    saveSettings({ base: $("set-base").value.trim(), key: $("set-key").value.trim(), model: $("set-model").value.trim() });
+    $("mask").classList.remove("show");
+    toast("已保存（仅存在本机浏览器）");
+  });
+  $("mask").addEventListener("click", function (e) { if (e.target === this) this.classList.remove("show"); });
+
+  // ================= 启动 =================
+  renderTabs();
+  renderList();
+})();
+</script>
+</body>
+</html>
