@@ -2,7 +2,11 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="申论练笔">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>申论练笔 · AI 评判</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23b4832a'/%3E%3Ctext x='32' y='45' font-size='34' text-anchor='middle' fill='white' font-family='serif'%3E%E9%98%85%3C/text%3E%3C/svg%3E">
 <link rel="manifest" href="pwa-simple.webmanifest">
@@ -16,7 +20,7 @@
     --rem-bg:#fdf3dd; --rem-bd:#f0dcae; --rem-tx:#8a5b13;
     --mask:rgba(30,25,18,.45); --toast-bg:#2b2620; --toast-tx:#fff;
     --paper-rgb:250,247,241; --shadow:rgba(43,38,32,.07);
-    --fs-mat:14px; --fs-q:15px; --fs-ta:15px;
+    --fs-mat:15px; --fs-q:15px; --fs-ta:16px;
     --radius:14px;
   }
   html.dark{
@@ -28,14 +32,17 @@
     --mask:rgba(0,0,0,.6); --toast-bg:#efe9dd; --toast-tx:#2b2620;
     --paper-rgb:21,19,15; --shadow:rgba(0,0,0,.35);
   }
-  html.fs-lg{ --fs-mat:16px; --fs-q:17px; --fs-ta:17px; }
-  html.fs-xl{ --fs-mat:18px; --fs-q:19px; --fs-ta:19px; }
+  html.fs-lg{ --fs-mat:17px; --fs-q:17px; --fs-ta:18px; }
+  html.fs-xl{ --fs-mat:19px; --fs-q:19px; --fs-ta:20px; }
 
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   body{
     font-family:-apple-system,"PingFang SC","Helvetica Neue",sans-serif;
     background:var(--paper); color:var(--ink); line-height:1.7;
-    padding-bottom:48px;
+    padding-bottom:calc(48px + env(safe-area-inset-bottom));
+    touch-action:manipulation;          /* 禁双击缩放，点按零延迟 */
+    overscroll-behavior-y:none;         /* 禁下拉刷新/回弹，避免打断写作心流 */
+    -webkit-text-size-adjust:100%;
   }
   .wrap{max-width:680px;margin:0 auto;padding:0 16px}
 
@@ -127,6 +134,7 @@
     max-height:260px;overflow-y:auto;padding:10px 12px;
     background:var(--mat-bg);border-radius:10px;border:1px solid var(--mat-line);
     font-family:"STFangsong","FangSong","Songti SC","STSong",serif;
+    -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
   }
   .material::-webkit-scrollbar{width:6px}
   .material::-webkit-scrollbar-thumb{background:var(--mat-line);border-radius:3px}
@@ -145,7 +153,10 @@
     border:1px solid var(--line);border-radius:10px;padding:12px;
     background:var(--ta-bg);color:var(--ink);outline:none;
     transition:border-color .15s;
+    appearance:none;-webkit-appearance:none;
   }
+  /* 触屏按键反馈 */
+  @media(hover:none){ .btn:active,.btn-mini:active,.tab:active{opacity:.72} }
   textarea:focus{border-color:var(--amber)}
   .photo-row{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
   .photo-hint{font-size:12px;color:var(--sub)}
@@ -246,7 +257,7 @@
   .field input:focus{border-color:var(--amber)}
   .sheet .actions{margin-top:6px}
   .toast{
-    position:fixed;left:50%;bottom:80px;transform:translateX(-50%);
+    position:fixed;left:50%;bottom:calc(80px + env(safe-area-inset-bottom));transform:translateX(-50%);
     background:var(--toast-bg);color:var(--toast-tx);font-size:13px;
     padding:9px 18px;border-radius:99px;z-index:99;
     opacity:0;transition:opacity .25s;pointer-events:none;max-width:80vw;
@@ -255,6 +266,18 @@
   @media(min-width:700px){
     .mask{align-items:center;padding:0 16px}
     .sheet{border-radius:18px}
+  }
+  /* ---------- 手机端微调 ---------- */
+  @media(max-width:640px){
+    .topbar{padding:10px 0}
+    .tab{padding:7px 15px;font-size:13px}
+    .qcard{padding:13px 14px}
+    textarea{min-height:38vh}
+    .actions .btn{padding:12px 18px}
+    .photo-row .photo-hint{flex-basis:100%;margin-top:4px}
+    .crumb{padding:10px 0 4px;font-size:13px}
+    header{background:rgba(var(--paper-rgb),.96)}
+    .sheet{padding:18px 16px calc(24px + env(safe-area-inset-bottom))}
   }
 </style>
 </head>
@@ -345,6 +368,14 @@
       <label>模型名称</label>
       <input id="set-model" placeholder="deepseek-chat">
     </div>
+    <div class="field" style="margin-top:18px">
+      <label>数据备份：草稿、评分记录、失分点统计都存在本机浏览器。换手机、重装或清理浏览器数据前，先导出备份。</label>
+      <div class="actions">
+        <button class="btn btn-ghost" id="btn-export">导出备份</button>
+        <button class="btn btn-ghost" id="btn-import-btn">导入备份</button>
+        <input type="file" id="btn-import" accept="application/json,.json" style="display:none">
+      </div>
+    </div>
     <div class="actions">
       <button class="btn btn-primary" id="btn-save-settings">保存</button>
       <button class="btn btn-ghost" id="btn-cancel-settings">取消</button>
@@ -369,6 +400,8 @@
 
   var ANIM = true;
   try { ANIM = !window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+  // iOS 拦截双指缩放（页面内容不适合缩放阅读，避免误触后布局乱）
+  document.addEventListener("gesturestart", function (e) { e.preventDefault(); });
 
   // ================= 数据 =================
   var VOLUMES = [
@@ -1065,6 +1098,48 @@
   }
   $("btn-settings").addEventListener("click", openSettings);
   $("btn-cancel-settings").addEventListener("click", function () { $("mask").classList.remove("show"); });
+
+  // ---------- 数据备份（换手机 / 清数据前的保命绳） ----------
+  $("btn-export").addEventListener("click", function () {
+    var data = { v: 1, store: store, settings: loadSettings() };
+    var blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    var d = new Date();
+    function p(n) { return (n < 10 ? "0" : "") + n; }
+    a.download = "shenlun-backup-" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + ".json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 8000);
+    toast("备份已导出，请妥善保存文件");
+  });
+  $("btn-import-btn").addEventListener("click", function () { $("btn-import").click(); });
+  $("btn-import").addEventListener("change", function () {
+    var f = this.files && this.files[0];
+    this.value = "";
+    if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      if (!confirm("导入将覆盖当前全部草稿、评分记录和失分点统计，确定继续？")) return;
+      try {
+        var data = JSON.parse(reader.result);
+        if (!data || !data.store) throw new Error("文件里没有数据");
+        store.drafts = (data.store.drafts) || {};
+        store.grades = (data.store.grades) || {};
+        store.weak = (data.store.weak) || {};
+        if (data.settings) saveSettings(data.settings);
+        save();
+        applyPrefs();
+        showView("list");
+        renderList();
+        toast("数据已恢复");
+      } catch (e) {
+        toast("导入失败：" + (e.message || e));
+      }
+    };
+    reader.readAsText(f);
+  });
   $("btn-save-settings").addEventListener("click", function () {
     saveSettings({ base: $("set-base").value.trim(), key: $("set-key").value.trim(), model: $("set-model").value.trim() });
     $("mask").classList.remove("show");
