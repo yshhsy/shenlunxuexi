@@ -131,6 +131,12 @@
   .summary{font-size:14px;color:#4a443c;white-space:pre-wrap}
   .err{color:var(--bad);font-size:14px;white-space:pre-wrap}
 
+  .code-tag{display:inline-block;font-size:11px;background:#f7e8e6;color:var(--bad);border-radius:6px;padding:0 6px;margin-right:6px;vertical-align:1px;white-space:nowrap}
+  .remind-box{margin-top:12px;font-size:13px;color:#8a5b13;background:#fdf3dd;border:1px solid #f0dcae;border-radius:10px;padding:10px 12px}
+  .weak-item{display:flex;align-items:baseline;gap:8px;font-size:14px;margin:8px 0}
+  .weak-cnt{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--sub);font-size:13px;white-space:nowrap}
+  .weak-src{font-size:12px;color:var(--sub)}
+
   /* ---------- 参考答案 ---------- */
   .ref-body{font-size:14px;white-space:pre-wrap;color:#4a443c}
 
@@ -179,6 +185,10 @@
 <!-- ============ 题目列表 ============ -->
 <div class="wrap view show" id="view-list">
   <div class="tabs" id="tabs"></div>
+  <div class="panel" id="weak-panel" style="display:none">
+    <h3><span>我的失分点 · 跨题统计</span></h3>
+    <div id="weak-list"></div>
+  </div>
   <div class="qlist" id="qlist"></div>
 </div>
 
@@ -267,7 +277,7 @@
 
   // ================= 本地存储 =================
   var STORE = "shenlun-simple-v1";
-  var store = { drafts: {}, grades: {} };
+  var store = { drafts: {}, grades: {}, weak: {} };
   try { store = Object.assign(store, JSON.parse(localStorage.getItem(STORE) || "{}")); } catch (e) {}
   function save() { localStorage.setItem(STORE, JSON.stringify(store)); }
 
@@ -327,6 +337,7 @@
   function renderList() {
     var el = $("qlist");
     el.innerHTML = "";
+    renderWeakPanel();
     qs.filter(function (it) { return curTab === "all" || it.vol === curTab; })
       .sort(function (a, b) { return a.q.source < b.q.source ? -1 : 1; })
       .forEach(function (it) {
@@ -425,10 +436,39 @@
   });
 
   // ================= 提示词构建 =================
+  // 失分点编号 → 名称（分类体系来自 coffe-d/Shenlun.skill，MIT License）
+  var WEAK_NAMES = {
+    A1: "漏采分点", A2: "找错位置", A3: "自我脑补", A4: "未用材料原词",
+    B1: "无统一句式", B2: "分类逻辑混乱", B3: "条数不当", B4: "未按领域归类",
+    C1: "总括句误用", C2: "总括与分论不对应", C3: "段落比例失衡", C4: "层次不分明", C5: "第三层展开不足",
+    D1: "漏要素", D2: "要素配对错乱", D3: "对策无来源", D4: "影响层级不足",
+    E1: "未扣材料", E2: "答题范围找错",
+    F1: "口语化", F2: "字数违规", F3: "未落实形式要求",
+    G1: "偏题跑题", G2: "标题与总论点不一致", G3: "无明确中心论点", G4: "中心论点虚化",
+    H1: "只举未证", H3: "论证深度不足", H4: "素材陈旧"
+  };
+
+  var ERROR_BANK_TEXT = [
+    "【失分点分类表（编号·判定标准），评判时给每条问题标注编号】",
+    "A 找点：A1-漏采分点（对照采分点清单有要点未答）｜A2-找错位置（用了题干范围外的材料）｜A3-自我脑补（写了材料中没有的内容）｜A4-未用材料原词（该用原词处自行改写丢失关键词）",
+    "B 归并：B1-无统一句式（各条概括词字数结构不齐）｜B2-分类逻辑混乱（同层未合并/异层混一条）｜B3-条数不当（过散或过并）｜B4-未按领域归类（按材料出现顺序罗列）",
+    "C 结构：C1-总括句误用（归纳概括不应写却写了；综合分析应写却没写）｜C2-总括与分论不对应｜C3-段落比例失衡｜C4-层次不分明（并列堆砌无递进）｜C5-双主题第三层展开不足",
+    "D 要素：D1-漏要素（题干要问题+建议只答其一）｜D2-要素配对错乱（举措与成效未对齐）｜D3-对策无来源｜D4-影响层级不足（未做到微观→中观→宏观）",
+    "E 材料：E1-未扣材料（全文未引用给定材料）｜E2-答题范围找错",
+    "F 表述：F1-口语化（未用申论规范表述）｜F2-字数违规（超限或明显不足）｜F3-未落实形式要求",
+    "G 立意（大作文）：G1-偏题跑题｜G2-标题与总论点不一致｜G3-无明确中心论点｜G4-中心论点虚化（有但空泛）",
+    "H 论证（大作文）：H1-只举未证（案例未证明论点）｜H3-论证深度不足（只有案例加口号）｜H4-素材陈旧或与论点无关"
+  ].join("\n");
+
   function buildPrompt(q, answer) {
     var limit = parseLimit(q.question);
+    var isEssay = /文章写作|大作文|议论文/.test(q.question) || parseFullScore(q.question) >= 35;
     return [
       "你是一名资深申论阅卷老师，请严格按公务员考试申论阅卷标准评判下面这份考生作答。",
+      "阅卷硬规则：归纳概括类作答不写总括句（写了不加分）；综合分析类作答必须写总括句（没有要扣分）。",
+      isEssay ? "本题是大作文：先判是否跑题，再按累进四类文定档（跑题→三类文→开头结尾写得好进二类→分论点论证写得好进一类），在 grade_class 里填档位（如：一类文（下档））。论证只举例子不算论证，要看出通过什么手段解决了什么达到什么效果。" : "本题是小题：用采分点覆盖法逐条核对，用题目实际分值打分。",
+      "",
+      ERROR_BANK_TEXT,
       "",
       "【题目】",
       q.question,
@@ -441,8 +481,9 @@
       "【考生作答】",
       answer || "（考生未作答）",
       "",
-      "请先按评分要点逐条对照，再输出。只输出一个 JSON 对象，不要输出任何其它文字，格式如下：",
-      '{"score":<得分数字>,"total":<满分数字>,"verdict":"一句话总评（20字左右）","dimensions":[{"name":"维度名（如 要点全面性/条理结构/语言规范/卷面贴合度）","score":<数字>,"full":<该维度满分>,"comment":"简短点评"}],"strengths":["亮点1","亮点2"],"problems":["问题1（具体到漏了哪个要点或写错了什么）","问题2"],"suggestion":"下一步提升建议（2-3句，具体可操作）"}'
+      "评判要求：①先按评分要点逐条对照；②每条问题标注失分点编号；③不做错别字检查，语言部分只给「口语化原文→规范表述」的替换建议并说明为什么更好（给到具体词，没有则给空数组）。",
+      "只输出一个 JSON 对象，不要输出任何其它文字，格式如下：",
+      '{"score":<得分数字>,"total":<满分数字>,"verdict":"一句话总评（20字左右）","grade_class":"档位，大作文填如 一类文（下档），小题填空字符串","dimensions":[{"name":"维度名（如 要点全面性/条理结构/语言规范）","score":<数字>,"full":<该维度满分>,"comment":"简短点评"}],"strengths":["亮点1","亮点2"],"problems":[{"code":"失分点编号（从分类表选，如 A1-漏采分点；确实不属于任何类则用 其他）","text":"具体表现（具体到漏了哪个要点/写错了什么）"}],"upgrades":[{"from":"考生原句","to":"规范表述","why":"为什么更好"}],"suggestion":"下一步提升建议（2-3句，具体可操作）"}'
     ].join("\n");
   }
 
@@ -512,9 +553,10 @@
       }
       g.at = Date.now();
       g.secs = elapsed;
+      var reminders = updateWeak(g, q); // 先算复发提醒，再入错题库
       store.grades[q.id] = g;
       save();
-      renderGrade(g, false);
+      renderGrade(g, false, reminders);
     }).catch(function (e) {
       $("grade-area").innerHTML =
         '<div class="panel"><p class="err">评判失败：' + esc(e.message || e) + "</p>" +
@@ -534,16 +576,69 @@
       g.total = g.total || parseFullScore(q.question);
       g.dimensions = g.dimensions || [];
       g.strengths = g.strengths || [];
-      g.problems = g.problems || [];
+      g.problems = (g.problems || []).map(function (p) {
+        if (typeof p === "string") return { code: "其他", text: p };
+        return { code: p.code || "其他", text: p.text || "" };
+      });
+      g.upgrades = g.upgrades || [];
       return g;
     } catch (e) { return null; }
   }
 
-  function renderGrade(g, isHistory) {
+  // ---------- 错题库：跨题失分点统计（规则来自 coffe-d/Shenlun.skill，MIT） ----------
+  function weakStatus(n) { return n >= 3 ? "🔴 顽固" : (n === 2 ? "🟠 复发" : "🟡 初现"); }
+  function codeOf(p) {
+    var code = typeof p === "string" ? "" : (p.code || "");
+    var m = /^([A-H]\d)/.exec(code);
+    return m ? m[1] : null;
+  }
+  function updateWeak(g, q) {
+    var reminders = [];
+    store.weak = store.weak || {};
+    // 同一篇重新批改只更新记录不累加：先扣回上次贡献，再记本次（计短板次数，不计批改次数）
+    var old = store.grades[q.id];
+    if (old && old.problems) {
+      old.problems.forEach(function (p) {
+        var c = codeOf(p);
+        if (c && store.weak[c]) {
+          store.weak[c].count = Math.max(0, store.weak[c].count - 1);
+          if (store.weak[c].count === 0) delete store.weak[c];
+        }
+      });
+    }
+    (g.problems || []).forEach(function (p) {
+      var c = codeOf(p);
+      if (!c) return;
+      var w = store.weak[c];
+      if (w && w.count >= 1) {
+        reminders.push("「" + c + " " + (WEAK_NAMES[c] || "") + "」这是第 " + (w.count + 1) + " 次了，上次在 " + w.lastSrc + " 也出现过（本次：" + (p.text || "") + "）。建议专项训练：找 2-3 道同类题集中练，只改这一点。");
+      }
+      if (!w) store.weak[c] = { count: 1, first: q.source, lastSrc: q.source };
+      else { w.count += 1; w.lastSrc = q.source; }
+    });
+    return reminders;
+  }
+  function renderWeakPanel() {
+    var panel = $("weak-panel"), list = $("weak-list");
+    var keys = Object.keys(store.weak || {});
+    if (!keys.length) { panel.style.display = "none"; return; }
+    keys.sort(function (a, b) { return store.weak[b].count - store.weak[a].count; });
+    var h = [];
+    keys.forEach(function (c) {
+      var w = store.weak[c];
+      h.push('<div class="weak-item"><span>' + weakStatus(w.count) + '</span><span><span class="dim-name">' + esc(c + " " + (WEAK_NAMES[c] || "")) + '</span><br><span class="weak-src">最近：' + esc(w.lastSrc) + '</span></span><span class="weak-cnt">' + w.count + " 次</span></div>");
+    });
+    h.push('<p style="font-size:12px;color:var(--sub);margin-top:8px">🔴 顽固（≥3 次）建议专项训练 · 🟠 复发（2 次）需警惕 · 🟡 初现（1 次）正常记录。同一题重新评判不重复计数。</p>');
+    list.innerHTML = h.join("");
+    panel.style.display = "block";
+  }
+
+  function renderGrade(g, isHistory, reminders) {
     var h = [];
     h.push('<div class="score-card">');
+    var cls = g.grade_class ? '<span class="badge" style="margin-right:6px">' + esc(g.grade_class) + "</span>" : "";
     h.push('<div class="score-head"><span class="score-big">' + g.score + "<small> / " + g.total + '</small></span>' +
-      '<span class="score-verdict">' + esc(g.verdict || "") + (isHistory ? '<br><span style="font-size:12px;color:var(--sub)">（上次评判结果）</span>' : "") + "</span></div>");
+      '<span class="score-verdict">' + cls + esc(g.verdict || "") + (isHistory ? '<br><span style="font-size:12px;color:var(--sub)">（上次评判结果）</span>' : "") + "</span></div>");
     (g.dimensions || []).forEach(function (d) {
       h.push('<div class="dim"><div class="dim-row"><span class="dim-name">' + esc(d.name) + '</span><span class="dim-score">' +
         esc(d.score) + "/" + esc(d.full) + '</span></div>' +
@@ -556,7 +651,20 @@
     }
     if (g.problems && g.problems.length) {
       h.push('<div class="sec-title bad">✧ 扣分点</div>');
-      g.problems.forEach(function (x) { h.push('<div class="li">' + esc(x) + "</div>"); });
+      g.problems.forEach(function (p) {
+        var code = typeof p === "string" ? "其他" : (p.code || "其他");
+        var text = typeof p === "string" ? p : (p.text || "");
+        h.push('<div class="li"><span class="code-tag">' + esc(code) + "</span>" + esc(text) + "</div>");
+      });
+    }
+    if (g.upgrades && g.upgrades.length) {
+      h.push('<div class="sec-title" style="color:var(--amber)">✎ 表述升级</div>');
+      g.upgrades.forEach(function (u) {
+        h.push('<div class="li">「' + esc(u.from) + '」→「<b>' + esc(u.to) + '」</b>' + (u.why ? '<span style="color:var(--sub)">（' + esc(u.why) + "）</span>" : "") + "</div>");
+      });
+    }
+    if (reminders && reminders.length) {
+      h.push('<div class="remind-box">⚠️ ' + reminders.map(esc).join("<br>⚠️ ") + "</div>");
     }
     if (g.suggestion) {
       h.push('<div class="sec-title" style="color:var(--amber)">✎ 提升建议</div><div class="summary">' + esc(g.suggestion) + "</div>");
@@ -583,6 +691,8 @@
   $("mask").addEventListener("click", function (e) { if (e.target === this) this.classList.remove("show"); });
 
   // ================= 启动 =================
+  // 调试/测试钩子（只读暴露内部纯函数，便于浏览器端验证）
+  window.__slDebug = { updateWeak: updateWeak, renderGrade: renderGrade, buildPrompt: buildPrompt, renderWeakPanel: renderWeakPanel, getStore: function () { return store; } };
   renderTabs();
   renderList();
 })();
